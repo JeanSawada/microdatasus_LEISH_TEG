@@ -1,0 +1,106 @@
+---
+title: "Leishmaniose Tegumentar 2019-2024"
+format: html
+editor: visual
+---
+
+## Leishmaniose Tegumentar 2019-2024
+
+Dados obtidos pelo SINAM
+
+#### Pacotes necessários
+
+```{r}
+install.packages("remotes")
+remotes::install_github("rfsaldanha/microdatasus")
+install.packages("tidyverse")
+install.packages("geobr")
+```
+
+#### Ativando os pacotes
+
+```{r}
+library(microdatasus)
+library(tidyverse)
+library(geobr)
+library(sf)
+```
+
+#### Baixando dados do DATASUS
+
+```{r}
+dados_lta <- fetch_datasus(
+  year_start = 2019, 
+  year_end = 2024, 
+  information_system = "SINAN-LEISHMANIOSE-TEGUMENTAR")
+```
+
+#### Processando os dados
+
+```{r}
+dados_lta_proc <- process_sinan_leishmaniose_tegumentar(dados_lta)
+```
+
+```{r}
+casos_municipio <- dados_lta_proc %>%
+  filter(!is.na(ID_MN_RESI)) %>%
+  mutate(
+    code_muni = str_sub(as.character(ID_MN_RESI), 1, 6)
+  ) %>%
+  group_by(code_muni) %>%
+  summarise(casos = n())
+```
+
+#### Criando o mapa
+
+```{r}
+mapa_muni <- read_municipality(year = 2020, showProgress = FALSE)
+```
+
+```{r}
+mapa_muni <- mapa_muni %>%
+  mutate(
+    code_muni = str_sub(as.character(code_muni), 1, 6)
+  )
+```
+
+```{r}
+mapa_dados <- mapa_muni %>%
+  left_join(casos_municipio, by = "code_muni") %>%
+  mutate(casos = replace_na(casos, 0))
+print(summary(mapa_dados$casos))
+```
+
+```{r}
+sigla_estado <- "BR"
+mapa_lta <- ggplot(mapa_dados) +
+  geom_sf(aes(fill = casos), color = "white", size = 0.1) +
+  scale_fill_gradient(
+    low = "#c6dbef",
+    high = "#08306b",
+    name = "Nº de Casos",
+    na.value = "grey90"
+  ) +
+  labs(
+    title = "Casos de Leishmaniose Tegumentar (2019-2024)",
+    subtitle = paste("Estado:", sigla_estado),
+    caption = "Fonte: SINAN / DATASUS via microdatasus | IBGE via geobr"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(face = "bold", size = 14, hjust = 0.5),
+    plot.subtitle = element_text(size = 12, hjust = 0.5),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    panel.grid = element_blank()
+  )
+print(mapa_lta)
+```
+
+#### Exportanto para o QGIS
+
+```{r}
+st_write(mapa_dados, "leishmaniose_municipios.gpkg", delete_dsn = TRUE)
+```
+
+![Resultado no QGIS](images/Captura%20de%20Tela%202026-07-31%20às%2010.19.31%20AM.png){fig-align="center"}
